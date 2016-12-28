@@ -89,7 +89,7 @@ function initialize_database() {
   log_info 'Initializing database ...'
   log_info 'Running mysql_install_db ...'
   # Using --rpm since we need mysql_install_db behaves as in RPM
-  mysql_install_db --rpm --datadir=$MYSQL_DATADIR
+  mysql_install_db --rpm --datadir=$MYSQL_DATADIR --basedir=''
   start_local_mysql "$@"
 
   if [ -v MYSQL_RUNNING_AS_SLAVE ]; then
@@ -161,3 +161,84 @@ function wait_for_mysql_master() {
     sleep 1
   done
 }
+
+# checks whether the server given as argument is running mysqld
+# accepts options in format addr[:port], port is optional
+function remote_mysql_server_on() {
+  local host=$(echo "${1}" | cut -d':' -f1)
+  local port=$(echo "${1}:" | cut -d':' -f2)
+  port=${port:-3306}
+  SECONDS=0
+  while /bin/true; do
+    RESPONSE=`mysqladmin --no-defaults --user=UNKNOWN_MYSQL_USER -h $host -P $port ping 2>&1`
+    mret=$?
+    if [ $mret -eq 0 ] ; then
+      return 0
+    fi
+    # exit codes 1, 11 (EXIT_CANNOT_CONNECT_TO_SERVICE) are expected,
+    # anything else suggests a configuration error
+    if [ $mret -ne 1 -a $mret -ne 11 ]; then
+      echo "Cannot check for MariaDB Daemon startup because of mysqladmin failure." >&2
+        return $mret
+    fi
+    # "Access denied" also means the server is alive
+    if echo "$RESPONSE" | grep -q "Access denied for user" ; then
+      return 0
+    fi
+    if [ $SECONDS -gt 5 ] ; then
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+# checks whether any of the nodes from MYSQL_CLUSTER_NODES are already on and running mysqld
+function any_cluster_node_on() {
+  MYSQL_NODE_PING_TIMEOUT=5
+  for node in `echo "${MYSQL_CLUSTER_NODES:-}" | sed -e 's/,/ /g'` ; do
+    if ping -q -W ${MYSQL_NODE_PING_TIMEOUT} -c 1 "${node}" &>/dev/null ; then
+      remote_mysql_server_on "${node}" || break
+      log_info "Existing node found: ${node}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# returns IP of current container
+function get_current_ip() {
+  ip route | awk '/default/ { print $3 }'
+}
+
+# returns value for wsrep_cluster_address option
+# adds IP of the current container if missing and prefixes with gcomm://
+function get_cluster_nodes_list_opt() {
+  res='gcomm://'
+  current_ip=$(get_current_ip)
+  current_ip_included=false
+  for node in `echo "${MYSQL_CLUSTER_NODES:-}" | sed -e 's/,/ /g'` ; do
+    if [ "$current_ip" == "$node" ] ; then
+      current_ip_included=true
+    fi
+    res="${res}${node},"
+  done
+  if [ "$current_ip_included" == true ] ; then
+    res="${res%,}"
+  else
+    res="${res}${current_ip}"
+  fi
+  echo "${res}"
+}
+
+# removes --wsrep-new-cluster option from list of options for mysqld
+function filter_cluster_init_opt() {
+  res=""
+  while [ $# -gt 0 ] ; do
+    if [ "${1}" != '--wsrep-new-cluster' ] ; then
+      res="${res} \"${1}\""
+    fi
+    shift
+  done
+  echo "${res}"
+}
+

@@ -25,7 +25,7 @@ EXPOSE 3306
 # safe in the future. This should *never* change, the last test is there
 # to make sure of that.
 RUN yum install -y centos-release-scl-rh && \
-    INSTALL_PKGS="rsync tar gettext hostname bind-utils rh-mariadb101" && \
+    INSTALL_PKGS="rsync tar gettext hostname bind-utils rh-mariadb101 rh-mariadb101-mariadb-server-galera rh-mariadb101-galera which iproute" && \
     yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
     rpm -V $INSTALL_PKGS && \
     yum clean all && \

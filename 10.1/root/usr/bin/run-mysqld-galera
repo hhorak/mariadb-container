@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# This is an entrypoint that runs the MySQL server in the 'galera' mode.
+#
+export_vars=$(cgroup-limits); export $export_vars
+source ${CONTAINER_SCRIPTS_PATH}/common.sh
+set -eu
+
+export MYSQL_RUNNING_AS_GALERA=1
+
+[ -f ${CONTAINER_SCRIPTS_PATH}/validate-galera-variables.sh ] && source ${CONTAINER_SCRIPTS_PATH}/validate-galera-variables.sh
+[ -f ${CONTAINER_SCRIPTS_PATH}/validate-variables.sh ] && source ${CONTAINER_SCRIPTS_PATH}/validate-variables.sh
+
+# Process the MySQL configuration files
+log_info 'Processing MySQL configuration files ...'
+envsubst < ${CONTAINER_SCRIPTS_PATH}/my-base.cnf.template > /etc/my.cnf.d/base.cnf
+envsubst < ${CONTAINER_SCRIPTS_PATH}/my-paas.cnf.template > /etc/my.cnf.d/paas.cnf
+envsubst < ${CONTAINER_SCRIPTS_PATH}/my-tuning.cnf.template > /etc/my.cnf.d/tuning.cnf
+
+
+if [ ! -d "$MYSQL_DATADIR/mysql" ]; then
+  initialize_database "$@"
+else
+  start_local_mysql "$@"
+fi
+
+if [ -f ${CONTAINER_SCRIPTS_PATH}/passwd-change.sh ]; then
+  log_info 'Setting passwords ...'
+  source ${CONTAINER_SCRIPTS_PATH}/passwd-change.sh
+fi
+if [ -f ${CONTAINER_SCRIPTS_PATH}/post-init.sh ]; then
+  log_info 'Sourcing post-init.sh ...'
+  source ${CONTAINER_SCRIPTS_PATH}/post-init.sh
+fi
+
+# Restart the MySQL server with public IP bindings
+shutdown_local_mysql
+
+# if some of the nodes already operate, do not bootstrap cluster again
+mysqld_opts="$@"
+if any_cluster_node_on ; then
+  log_info "Some nodes already working."
+  if [[ "$@" =~ --wsrep-new-cluster ]] ; then
+    log_info "Removing --wsrep-new-cluster argument."
+    mysqld_opts=$(filter_cluster_init_opt "$@")
+  fi
+else
+  log_info "No nodes seem to be operating yet."
+  if ! [[ "$@" =~ --wsrep-new-cluster ]] ; then
+    log_info "For initialization of a new cluster, run the container with --wsrep-new-cluster argument."
+  fi
+fi
+
+# make sure list of nodes includes this node address
+export MYSQL_CLUSTER_NODES_FIXED=$(get_cluster_nodes_list_opt)
+log_info "List of cluster nodes: ${MYSQL_CLUSTER_NODES_FIXED}"
+envsubst < ${CONTAINER_SCRIPTS_PATH}/my-galera.cnf.template > /etc/my.cnf.d/galera.cnf
+
+unset_env_vars
+log_volume_info $MYSQL_DATADIR
+log_info 'Running final exec -- Only MySQL server logs after this point'
+exec ${MYSQL_PREFIX}/libexec/mysqld --defaults-file=$MYSQL_DEFAULTS_FILE ${mysqld_opts} 2>&1

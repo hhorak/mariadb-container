@@ -1,3 +1,4 @@
+
 function usage() {
   [ $# == 1 ] && echo "error: $1"
   echo "You must either specify the following environment variables:"

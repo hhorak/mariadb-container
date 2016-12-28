@@ -388,7 +388,180 @@ function run_tests() {
   test_mysql "$container_ip" "$USER" "$PASS"
 }
 
+# Run galera container
+# @param docker_opts
+# @param docker_cmd_arg
+function run_galera_node() {
+  local cluster_args="-e MYSQL_ROOT_PASSWORD=root -e MYSQL_CLUSTER_NAME=testcluster -e MYSQL_DATABASE=db -e MYSQL_USER=user -e MYSQL_PASSWORD=pass"
+  local docker_opts="${1}" ; shift
+  local docker_cmd_arg="${@}"
+  local new_node_id=0
+  set +o nounset
+  if [ -v nodes_ip ] ; then
+    while [ -n "${nodes_ip[$new_node_id]}" ] ; do
+      ((new_node_id++)) || :
+    done
+  fi
+  set -o nounset
+
+  docker run ${cluster_args} ${docker_opts} \
+    -e MYSQL_INNODB_BUFFER_POOL_SIZE=5M \
+    -d --cidfile ${CIDFILE_DIR}/node${new_node_id}.cid $IMAGE_NAME run-mysqld-galera ${docker_cmd_arg} >/dev/null
+
+  nodes_ip[${new_node_id}]=$(get_container_ip node${new_node_id}.cid)
+}
+
+function kill_galera_node() {
+  local node_id="${1}"
+  docker kill $(get_cid node${node_id}.cid) >/dev/null
+  docker rm -v $(get_cid node${node_id}.cid) >/dev/null
+  rm -f "$CIDFILE_DIR/node${node_id}.cid"
+  shopt -u nullglob
+  unset nodes_ip[${node_id}]
+  shopt -s nullglob
+}
+
+function dump_galera_nodes_logs() {
+  for i in ${!nodes_ip[*]} ; do
+    echo "  Dumping logs for node #${i} $(get_cid node${i}.cid)"
+    docker logs $(get_cid node${i}.cid)
+  done
+}
+
+
+function galera_any_node_ip() {
+  local any_id=$(echo ${!nodes_ip[*]} | awk '{print $1}')
+  echo "${nodes_ip[${any_id}]}"
+}
+
+# Store some value, to simulate some real work to test replication in practice
+function galera_store_value() {
+  local exp_value="${1}"
+  mysql_cmd "$(galera_any_node_ip)" root root -e "CREATE TABLE t1 (a INT); INSERT INTO t1 VALUES (24);"
+}
+
+# Read value from other nodes and check whether it is expectd
+function galera_check_value() {
+  local max_attempts=10
+  local exp_value="${1}"
+  for node in ${nodes_ip[@]} ; do
+    echo -n "    Waiting to see the expected value ${exp_value} on node ${node}..."
+    for i in $(seq $max_attempts); do
+      echo -n "."
+      set +e
+      result="$(mysql_cmd "${node}" root root -e "select * from t1 \G" 2>/dev/null | grep -e ^a | grep ${exp_value})"
+      set -e
+      if [[ ! -z "${result}" ]]; then
+        echo
+        echo "    Node ${node} successfully got the expected value ${exp_value}"
+        break
+      fi
+      if [[ "${i}" == "${max_attempts}" ]]; then
+        echo
+        echo "    ERROR: The ${node} failed to see the expected value ${exp_value}"
+        dump_galera_nodes_logs
+        return 1
+      fi
+      sleep 1
+    done
+  done
+}
+
+function galera_check_cluster_size() {
+  local expected_size="${1}"
+  local max_attempts=30
+  # Now wait till the size of the cluster is same as number of items in nodes_ip, which means all nodes successfully joined
+  echo -n "    Waiting for ${#nodes_ip[*]} nodes to join the cluster..."
+  local any_node_ip=$(galera_any_node_ip)
+  local nodes_count=${#nodes_ip[*]}
+  if [ "${expected_size}" -ne "${nodes_count}" ] ; then
+    echo "    ERROR: The nodes count is not ${expected_size}, it is ${nodes_count}; values: ${nodes_ip[*]}; keys: ${!nodes_ip[*]}"
+    return 1
+  fi
+  local i
+  for i in $(seq $max_attempts); do
+    echo -n "."
+    result="$(mysql_cmd "${any_node_ip}" root root -e "SHOW STATUS LIKE 'wsrep_cluster_size';" 2>/dev/null | grep ${nodes_count} || true)"
+    if [[ -n "${result}" ]]; then
+      echo
+      echo "    All ${nodes_count} nodes successfully registered in the cluster."
+      break
+    fi
+    if [[ "${i}" == "${max_attempts}" ]]; then
+      echo
+      echo "    ERROR: The nodes failed to register in the cluster (${nodes_count})"
+      dump_galera_nodes_logs
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+function galera_wait_nodes_ready() {
+  local max_attempts=30
+  # Now wait till all servers are ready to accept connections
+  for node in ${nodes_ip[@]} ; do
+    echo -n "    Waiting for node ${node} to accept connections..."
+    for i in $(seq $max_attempts); do
+      echo -n "."
+      set +e
+      result="$(mysql_cmd "${node}" root root -e "select 27;" 2>/dev/null | grep 27)"
+      set -e
+      if [[ ! -z "${result}" ]]; then
+        echo
+        echo "    Node ${node} successfully accepting connections"
+        break
+      fi
+      if [[ "${i}" == "${max_attempts}" ]]; then
+        echo
+        echo "    ERROR: The ${node} failed to start accepting connections"
+        dump_galera_nodes_logs
+        return 1
+      fi
+      sleep 1
+    done
+  done
+}
+
+function run_galera_test() {
+  echo "  Testing the galera replication"
+  local max_attempts=30
+
+  # nodes_ip array holds IP addresses of particular nodes, adjusted in run_galera_node function
+  declare -a nodes_ip
+
+  # Run the first three nodes
+  run_galera_node "" --wsrep-new-cluster
+  run_galera_node "-e MYSQL_CLUSTER_NODES=${nodes_ip[0]}"
+  run_galera_node "-e MYSQL_CLUSTER_NODES=${nodes_ip[0]}"
+
+  galera_wait_nodes_ready
+  galera_check_cluster_size 3
+  galera_store_value 24
+  galera_check_value 24
+
+  # kill & restart every node, one by another
+  kill_galera_node 0
+  galera_check_cluster_size 2
+  run_galera_node "-e MYSQL_CLUSTER_NODES=$(galera_any_node_ip)"
+  galera_check_cluster_size 3
+
+  kill_galera_node 1
+  galera_check_cluster_size 2
+  run_galera_node "-e MYSQL_CLUSTER_NODES=$(galera_any_node_ip)"
+  galera_check_cluster_size 3
+
+  kill_galera_node 2
+  galera_check_cluster_size 2
+  run_galera_node "-e MYSQL_CLUSTER_NODES=$(galera_any_node_ip)"
+  galera_check_cluster_size 3
+
+  echo "  Success!"
+}
+
 # Tests.
+run_galera_test
+exit 1
 
 run_container_creation_tests
 
@@ -407,5 +580,8 @@ DOCKER_ARGS="-u 12345" USER=user1 PASS=pass1 ROOT_PASS=r00t run_tests root_altui
 # Test the password change
 run_change_password_test
 
-# Replication tests
+# Master-slave replication tests
 run_replication_test
+
+# Galera Replication tests
+run_galera_test
