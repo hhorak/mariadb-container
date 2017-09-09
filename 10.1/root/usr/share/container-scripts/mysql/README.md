@@ -59,13 +59,25 @@ initialization by passing `-e VAR=VALUE` to the Docker run command.
 
 The following environment variables influence the MySQL configuration file. They are all optional.
 
-|    Variable name                |    Description                                                    |    Default
-| :------------------------------ | ----------------------------------------------------------------- | -------------------------------
-|  `MYSQL_LOWER_CASE_TABLE_NAMES` | Sets how the table names are stored and compared                  |  0
-|  `MYSQL_MAX_CONNECTIONS`        | The maximum permitted number of simultaneous client connections   |  151
-|  `MYSQL_MAX_ALLOWED_PACKET`     | The maximum size of one packet or any generated/intermediate string | 200M
-|  `MYSQL_FT_MIN_WORD_LEN`        | The minimum length of the word to be included in a FULLTEXT index |  4
-|  `MYSQL_FT_MAX_WORD_LEN`        | The maximum length of the word to be included in a FULLTEXT index |  20
+`MYSQL_LOWER_CASE_TABLE_NAMES=0`
+
+    Sets how the table names are stored and compared
+
+`MYSQL_MAX_CONNECTIONS`=151
+    The maximum permitted number of simultaneous client connections
+
+MYSQL_MAX_ALLOWED_PACKET=200M
+    The maximum size of one packet or any generated/intermediate string
+
+`MYSQL_MAX_ALLOWED_PACKET` (size, default: 200M)
+    The maximum size of one packet or any generated/intermediate string
+
+MYSQL_FT_MIN_WORD_LEN (int, default: 4)
+    The minimum length of the word to be included in a FULLTEXT index
+
+`MYSQL_FT_MAX_WORD_LEN (default: 20)`
+    The maximum length of the word to be included in a FULLTEXT index
+
 |  `MYSQL_AIO`                    | Controls the `innodb_use_native_aio` setting value in case the native AIO is broken. See http://help.directadmin.com/item.php?id=529 |  1
 |  `MYSQL_TABLE_OPEN_CACHE`       | The number of open tables for all threads                         |  400
 |  `MYSQL_KEY_BUFFER_SIZE`        | The size of the buffer used for index blocks                      |  32M (or 10% of available memory)
