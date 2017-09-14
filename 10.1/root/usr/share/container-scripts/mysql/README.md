@@ -78,8 +78,12 @@ MYSQL_FT_MIN_WORD_LEN (int, default: 4)
 `MYSQL_FT_MAX_WORD_LEN (default: 20)`
     The maximum length of the word to be included in a FULLTEXT index
 
-|  `MYSQL_AIO`                    | Controls the `innodb_use_native_aio` setting value in case the native AIO is broken. See http://help.directadmin.com/item.php?id=529 |  1
-|  `MYSQL_TABLE_OPEN_CACHE`       | The number of open tables for all threads                         |  400
+`MYSQL_AIO`  
+       Controls the `innodb_use_native_aio` setting value in case the native AIO is broken. See http://help.directadmin.com/item.php?id=529
+
+`MYSQL_TABLE_OPEN_CACHE` (400)  
+       The number of open tables for all threads
+
 |  `MYSQL_KEY_BUFFER_SIZE`        | The size of the buffer used for index blocks                      |  32M (or 10% of available memory)
 |  `MYSQL_SORT_BUFFER_SIZE`       | The size of the buffer used for sorting                           |  256K
 |  `MYSQL_READ_BUFFER_SIZE`       | The size of the buffer used for a sequential scan                 |  8M (or 5% of available memory)
