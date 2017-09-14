@@ -87,6 +87,9 @@ MYSQL_FT_MIN_WORD_LEN (int, default: 4)
 `MYSQL_KEY_BUFFER_SIZE`
    The size of the buffer used for index blocks
 
+`MYSQL_KEY_BUFFER_SIZE`  
+   The size of the buffer used for index blocks
+
 `MYSQL_SORT_BUFFER_SIZE`
 The size of the buffer used for sorting
 
