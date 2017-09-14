@@ -78,17 +78,27 @@ MYSQL_FT_MIN_WORD_LEN (int, default: 4)
 `MYSQL_FT_MAX_WORD_LEN (default: 20)`
     The maximum length of the word to be included in a FULLTEXT index
 
-`MYSQL_AIO` 
+`MYSQL_AIO`  
        Controls the `innodb_use_native_aio` setting value in case the native AIO is broken. See http://help.directadmin.com/item.php?id=529
 
-`MYSQL_TABLE_OPEN_CACHE` (400) 
+`MYSQL_TABLE_OPEN_CACHE` (400)  
        The number of open tables for all threads
 
-|  `MYSQL_KEY_BUFFER_SIZE`        | The size of the buffer used for index blocks                      |  32M (or 10% of available memory)
-|  `MYSQL_SORT_BUFFER_SIZE`       | The size of the buffer used for sorting                           |  256K
-|  `MYSQL_READ_BUFFER_SIZE`       | The size of the buffer used for a sequential scan                 |  8M (or 5% of available memory)
-|  `MYSQL_INNODB_BUFFER_POOL_SIZE`| The size of the buffer pool where InnoDB caches table and index data |  32M (or 50% of available memory)
-|  `MYSQL_INNODB_LOG_FILE_SIZE`   | The size of each log file in a log group                          |  8M (or 15% of available available)
+`MYSQL_KEY_BUFFER_SIZE`
+   The size of the buffer used for index blocks
+
+`MYSQL_SORT_BUFFER_SIZE`
+The size of the buffer used for sorting
+
+* `MYSQL_READ_BUFFER_SIZE`  
+    The size of the buffer used for a sequential scan
+
+* `MYSQL_READ_BUFFER_SIZE`  
+    The size of the buffer used for a sequential scan
+
+`MYSQL_INNODB_BUFFER_POOL_SIZE` | The size of the buffer pool where InnoDB caches table and index data 32M (or 50% of available memory)
+`MYSQL_INNODB_LOG_FILE_SIZE`    | The size of each log file in a log group 8M (or 15% of available available)
+
 |  `MYSQL_INNODB_LOG_BUFFER_SIZE` | The size of the buffer that InnoDB uses to write to the log files on disk | 8M (or 15% of available memory)
 |  `MYSQL_DEFAULTS_FILE`          | Point to an alternative configuration file                        |  /etc/my.cnf
 |  `MYSQL_BINLOG_FORMAT`          | Set sets the binlog format, supported values are `row` and `statement` | statement
