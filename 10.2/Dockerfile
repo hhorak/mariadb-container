@@ -37,7 +37,7 @@ EXPOSE 3306
 # to make sure of that.
 RUN yum install -y centos-release-scl-rh && \
     yum-config-manager --enable centos-sclo-rh-testing && \
-    INSTALL_PKGS="rsync tar gettext hostname bind-utils groff-base shadow-utils rh-mariadb102" && \
+    INSTALL_PKGS="rsync tar gettext hostname bind-utils groff-base shadow-utils rh-mariadb102 rh-mariadb102-mariadb-server-galera rh-mariadb102-galera which iproute" && \
     yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
     rpm -V $INSTALL_PKGS && \
     yum clean all && \
